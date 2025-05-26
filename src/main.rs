@@ -7,7 +7,7 @@ use cursive::view::{SizeConstraint, ScrollStrategy};
 use cursive::traits::*;
 
 #[link(name = "c")]
-extern "C" {
+unsafe extern "C" {
     fn geteuid() -> u32;
 }
 
