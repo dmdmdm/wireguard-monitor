@@ -8,3 +8,5 @@ edition = "2024"
 
 [dependencies]
 cursive = { git = "https://github.com/gyscos/cursive" }
+lazy_static = "1.4"
+nix = { version = "0.30.1", features = [ "term", "process", "signal" ] }
