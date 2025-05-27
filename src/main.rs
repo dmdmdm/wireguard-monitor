@@ -1,6 +1,11 @@
 use std::process::{Command, Stdio};
 use std::cmp::min;
 use std::io::Read;
+use std::sync::{Arc, Mutex};
+use lazy_static::lazy_static;
+use nix::unistd::Pid;
+use nix::sys::signal::{kill,Signal};
+use cursive::Cursive;
 use cursive::align::HAlign;
 use cursive::views::{ResizedView, Dialog, LinearLayout, TextContent, TextView, Panel};
 use cursive::view::{SizeConstraint, ScrollStrategy};
@@ -41,6 +46,10 @@ fn background_top(content_wg: TextContent, content_ifconfig: TextContent) {
     }
 }
 
+lazy_static! {
+    static ref TCP_DUMP_PID: Arc<Mutex<Option<i32>>> = Arc::new(Mutex::new(None));
+}
+
 fn vec_to_text(vec: &Vec<String>) -> String {
     let mut txt: String = "".to_owned();
     for line in vec.iter() {
@@ -57,23 +66,33 @@ fn background_tcpdump(content_tcpdump: TextContent) {
         return;
     }
 
-    let child = Command::new("tcpdump")
+    let result = Command::new("tcpdump")
         .arg("-iwg0")
         .arg("-l")          // Line buffering (avoids delay)
         .arg("-n")          // No DNS lookups
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn();
-    if child.is_err() {
+    if result.is_err() {
         content_tcpdump.set_content("Could not run tcpdump - permission?");
         return;
     }
-    let stdout_result = child.unwrap().stdout;
+
+    let child = result.unwrap();
+
+    {   // Save PID
+        let mut pid_opt  = TCP_DUMP_PID.lock().unwrap();
+        let pid_i32:i32 = child.id().try_into().unwrap();
+        *pid_opt = Some(pid_i32);
+    }
+
+    let stdout_result = child.stdout;
 
     if stdout_result.is_none() {
         content_tcpdump.set_content("Could not get output from tcpdump");
         return;
     }
+
     let stdout = stdout_result.unwrap();
 
     content_tcpdump.set_content("tcpdump started, waiting for wg0 traffic");
@@ -83,7 +102,7 @@ fn background_tcpdump(content_tcpdump: TextContent) {
     let mut byte_line = Vec::new();
     for byte_result in stdout.bytes() {
         let byte = byte_result.unwrap();
-        if byte == 0x0A {
+        if byte == b'\n' {
             let line = String::from_utf8_lossy(&byte_line).to_string();
             byte_line.clear();
             vec.push(line);
@@ -98,6 +117,18 @@ fn background_tcpdump(content_tcpdump: TextContent) {
             byte_line.push(byte);
         }
     }
+}
+
+fn on_quit(siv: &mut Cursive) {
+    {
+        let pid_opt = TCP_DUMP_PID.lock().unwrap();
+        if pid_opt.is_some() {
+            let pid = Pid::from_raw(pid_opt.unwrap());
+            kill(pid, Signal::SIGKILL).expect("Could not kill child process");
+        }
+    }
+
+    siv.quit();
 }
 
 fn main() {
@@ -115,7 +146,7 @@ fn main() {
     let sheight = SizeConstraint::AtMost(box_height);
     let box1 = ResizedView::new(swidth, sheight, tv1);
     let pan1 = Panel::new(box1).title("wg show");
-    
+
     let content_ifconfig = TextContent::new("ifconfig...");
     let tv2 = TextView::new_with_content(content_ifconfig.clone())
         .no_wrap()
@@ -147,7 +178,7 @@ fn main() {
         .h_align(HAlign::Center),
     );
 
-    siv.add_global_callback('q', |s| s.quit());
+    siv.add_global_callback('q', |s: &mut Cursive| on_quit(s));
 
     std::thread::spawn(move || { background_top(content_wg, content_ifconfig) });
     std::thread::spawn(move || { background_tcpdump(content_tcpdump) });
