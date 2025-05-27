@@ -134,7 +134,8 @@ fn on_quit(siv: &mut Cursive) {
 fn main() {
     let mut siv = cursive::default();
     let size = siv.screen_size();
-    let height = size.y;
+    let mut height = size.y;
+    if height <= 0 { height = 24; }
     let box_height = height / 3;
 
     let content_wg = TextContent::new("wg...");
@@ -178,7 +179,7 @@ fn main() {
         .h_align(HAlign::Center),
     );
 
-    siv.add_global_callback('q', |s: &mut Cursive| on_quit(s));
+    siv.add_global_callback('q', on_quit);
 
     std::thread::spawn(move || { background_top(content_wg, content_ifconfig) });
     std::thread::spawn(move || { background_tcpdump(content_tcpdump) });
