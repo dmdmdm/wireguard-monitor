@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 use lazy_static::lazy_static;
 use nix::unistd::Pid;
 use nix::sys::signal::{kill,Signal};
+// use std::process;
 use cursive::Cursive;
 use cursive::align::HAlign;
 use cursive::views::{ResizedView, Dialog, LinearLayout, TextContent, TextView, Panel};
@@ -50,6 +51,20 @@ lazy_static! {
     static ref TCP_DUMP_PID: Arc<Mutex<Option<i32>>> = Arc::new(Mutex::new(None));
 }
 
+fn save_pid(pid_in: u32) {
+    let mut pid_opt = TCP_DUMP_PID.lock().unwrap();
+    let pid_i32:i32 = pid_in.try_into().unwrap();
+    *pid_opt = Some(pid_i32);
+}
+
+fn kill_pid() {
+    let pid_opt = TCP_DUMP_PID.lock().unwrap();
+    if pid_opt.is_some() {
+        let pid_struct = Pid::from_raw(pid_opt.unwrap());
+        kill(pid_struct, Signal::SIGKILL).expect("Could not kill child process");
+    }
+}
+
 fn vec_to_text(vec: &Vec<String>) -> String {
     let mut txt: String = "".to_owned();
     for line in vec.iter() {
@@ -80,11 +95,14 @@ fn background_tcpdump(content_tcpdump: TextContent) {
 
     let child = result.unwrap();
 
+    /*
     {   // Save PID
-        let mut pid_opt  = TCP_DUMP_PID.lock().unwrap();
+        let mut pid_opt = TCP_DUMP_PID.lock().unwrap();
         let pid_i32:i32 = child.id().try_into().unwrap();
         *pid_opt = Some(pid_i32);
     }
+    */
+    save_pid(child.id());
 
     let stdout_result = child.stdout;
 
@@ -120,14 +138,7 @@ fn background_tcpdump(content_tcpdump: TextContent) {
 }
 
 fn on_quit(siv: &mut Cursive) {
-    {
-        let pid_opt = TCP_DUMP_PID.lock().unwrap();
-        if pid_opt.is_some() {
-            let pid = Pid::from_raw(pid_opt.unwrap());
-            kill(pid, Signal::SIGKILL).expect("Could not kill child process");
-        }
-    }
-
+    kill_pid();
     siv.quit();
 }
 
