@@ -5,7 +5,6 @@ use std::sync::{Arc, Mutex};
 use lazy_static::lazy_static;
 use nix::unistd::Pid;
 use nix::sys::signal::{kill,Signal};
-// use std::process;
 use cursive::Cursive;
 use cursive::align::HAlign;
 use cursive::views::{ResizedView, Dialog, LinearLayout, TextContent, TextView, Panel};
