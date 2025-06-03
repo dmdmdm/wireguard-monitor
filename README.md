@@ -1,7 +1,7 @@
 # wireguard-monitor
 See what Wireguard is doing.
 
-It runs 3 commands in a terminal GUI (a TUI).
+It runs 3 Wireguard-related commands in a TUI (terminal user interface).
 - wg show: updated every second
 - ifconfig wg0: updated every second
 - tcpdump -i wg0: continuous scroll
