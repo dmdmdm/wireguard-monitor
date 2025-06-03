@@ -17,3 +17,8 @@ Linux only
     git clone https://github.com/dmdmdm/wireguard-monitor
     cd wireguard-monitor
     cargo run
+
+# Option
+By default it uses interface `wg0` but you can specify a different interface on the command line, eg:
+
+   cargo run wg4
