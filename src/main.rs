@@ -1,5 +1,5 @@
 use std::process::{Command, Stdio};
-use std::cmp::min;
+use std::env;
 use std::io::Read;
 use std::sync::{Arc, Mutex};
 use lazy_static::lazy_static;
@@ -31,17 +31,18 @@ fn get_wg() -> String {
     return String::from_utf8_lossy(&output.stdout).to_string();
 }
 
-fn get_ifconfig() -> String {
-    let output = Command::new("ifconfig").arg("wg0").output().expect("Could not run 'ifconfig wg0'");
+fn get_ifconfig(wg_interface: &str) -> String {
+    let msg = format!("Could not run 'ifconfig {}'", wg_interface);
+    let output = Command::new("ifconfig").arg(wg_interface).output().expect(&msg);
     return String::from_utf8_lossy(&output.stdout).to_string();
 }
 
-fn background_top(content_wg: TextContent, content_ifconfig: TextContent) {
+fn background_top(wg_interface: String, content_wg: TextContent, content_ifconfig: TextContent) {
     let half_sec = std::time::Duration::from_millis(500);
     loop {
          content_wg.set_content(get_wg());
          std::thread::sleep(half_sec);
-         content_ifconfig.set_content(get_ifconfig());
+         content_ifconfig.set_content(get_ifconfig(&wg_interface));
          std::thread::sleep(half_sec);
     }
 }
@@ -74,14 +75,15 @@ fn vec_to_text(vec: &Vec<String>) -> String {
     return txt;
 }
 
-fn background_tcpdump(content_tcpdump: TextContent) {
+fn background_tcpdump(wg_interface: String, content_tcpdump: TextContent) {
     if !is_root() {
         content_tcpdump.set_content("You must be root to run `tcpdump`");
         return;
     }
 
+    let dash_i = format!("-i{}", wg_interface);
     let result = Command::new("tcpdump")
-        .arg("-iwg0")
+        .arg(dash_i)
         .arg("-l")          // Line buffering (avoids delay)
         .arg("-n")          // No DNS lookups
         .stdout(Stdio::piped())
@@ -112,7 +114,8 @@ fn background_tcpdump(content_tcpdump: TextContent) {
 
     let stdout = stdout_result.unwrap();
 
-    content_tcpdump.set_content("tcpdump started, waiting for wg0 traffic");
+    let msg = format!("tcpdump start, waiting for {} traffic", wg_interface);
+    content_tcpdump.set_content(msg);
 
     let mut vec = Vec::<String>::new();
 
@@ -142,11 +145,13 @@ fn on_quit(siv: &mut Cursive) {
 }
 
 fn main() {
+    let mut wg_interface = String::from("wg0");
+    let args: Vec<String> = env::args().collect();
+    if args.len() > 1 {
+        wg_interface = args[1].clone();
+    }
+
     let mut siv = cursive::default();
-    let size = siv.screen_size();
-    let mut height = size.y;
-    if height <= 0 { height = 24; }
-    let box_height = height / 3;
 
     let content_wg = TextContent::new("wg...");
     let tv1 = TextView::new_with_content(content_wg.clone())
@@ -154,8 +159,8 @@ fn main() {
         .with_name("tv1")
         .scrollable();
     let swidth = SizeConstraint::Full;
-    let sheight = SizeConstraint::AtMost(box_height);
-    let box1 = ResizedView::new(swidth, sheight, tv1);
+    let sheight = SizeConstraint::Full;
+    let box1 = ResizedView::new(swidth, sheight, tv1).with_name("box1");
     let pan1 = Panel::new(box1).title("wg show");
 
     let content_ifconfig = TextContent::new("ifconfig...");
@@ -163,8 +168,9 @@ fn main() {
         .no_wrap()
         .with_name("tv2")
         .scrollable();
-    let box2 = ResizedView::with_max_height(min(7, box_height), tv2);
-    let pan2 = Panel::new(box2).title("ifconfig");
+    let box2 = ResizedView::with_max_height(7, tv2);
+    let title2 = format!("ifconfig {}", wg_interface);
+    let pan2 = Panel::new(box2).title(title2);
 
     let content_tcpdump = TextContent::new("tcpdump...");
     let mut tv3 = TextView::new_with_content(content_tcpdump.clone())
@@ -172,8 +178,9 @@ fn main() {
         .with_name("tv3")
         .scrollable();
     tv3.set_scroll_strategy(ScrollStrategy::StickToBottom);
-    let box3 = ResizedView::with_max_height(box_height, tv3);
-    let pan3 = Panel::new(box3).title("tcpdump");
+    let box3 = ResizedView::new(swidth, sheight, tv3);
+    let title3 = format!("tcpdump -i{}", wg_interface);
+    let pan3 = Panel::new(box3).title(title3);
 
     let tv4 = TextView::new("Press 'q' to quit");
 
@@ -191,8 +198,10 @@ fn main() {
 
     siv.add_global_callback('q', on_quit);
 
-    std::thread::spawn(move || { background_top(content_wg, content_ifconfig) });
-    std::thread::spawn(move || { background_tcpdump(content_tcpdump) });
+    let wg_interface_top = wg_interface.clone();
+    let wg_interface_tcpdump = wg_interface.clone();
+    std::thread::spawn(move || { background_top(wg_interface_top, content_wg, content_ifconfig) });
+    std::thread::spawn(move || { background_tcpdump(wg_interface_tcpdump, content_tcpdump) });
 
     siv.set_fps(1);
 
