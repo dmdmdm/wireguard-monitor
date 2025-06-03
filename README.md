@@ -21,4 +21,4 @@ Linux only
 # Option
 By default it uses interface `wg0` but you can specify a different interface on the command line, eg:
 
-   cargo run wg4
+    cargo run wg4
