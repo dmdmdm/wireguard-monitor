@@ -1,3 +1,5 @@
+
+regex = "1.11.1"
 [package]
 name = "wireguard-monitor"
 version = "0.1.0"
@@ -11,3 +13,4 @@ users = "0.11"
 cursive = "0.21.1"
 lazy_static = "1.4"
 nix = { version = "0.30.1", features = [ "term", "process", "signal" ] }
+regex = "1.11.1"
