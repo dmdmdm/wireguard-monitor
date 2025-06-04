@@ -25,6 +25,7 @@ By default it uses interface `wg0` but you can specify a different interface on 
 
 # Friendly peer names
 If you have file /etc/wireguard/peers setup with
+
     [public-key1]:[friendly-name1]
     [public-key2]:[friendly-name2]
     ...
