@@ -22,3 +22,11 @@ Linux only
 By default it uses interface `wg0` but you can specify a different interface on the command line, eg:
 
     cargo run wg4
+
+# Friendly peer names
+If you have file /erc/peers setup with
+    <public-key1>:<friendly-name1>
+    <public-key2>:<friendly-name2>
+    ...
+
+Our 'wg' window will display the friendly names like wgg - found here https://github.com/FlyveHest/wg-friendly-peer-names
