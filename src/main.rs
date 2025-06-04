@@ -10,18 +10,10 @@ use cursive::align::HAlign;
 use cursive::views::{ResizedView, Dialog, LinearLayout, TextContent, TextView, Panel};
 use cursive::view::{SizeConstraint, ScrollStrategy};
 use cursive::traits::*;
+mod wgg;
 
 fn is_root() -> bool {
     return users::get_current_uid() == 0
-}
-
-fn get_wg() -> String {
-    if !is_root() {
-        return "You must be root to run `wg`".to_string();
-    }
-
-    let output = Command::new("wg").arg("show").output().expect("Could not run 'wg show'");
-    return String::from_utf8_lossy(&output.stdout).to_string();
 }
 
 fn get_ifconfig(wg_interface: &str) -> String {
@@ -33,7 +25,7 @@ fn get_ifconfig(wg_interface: &str) -> String {
 fn background_top(wg_interface: String, content_wg: TextContent, content_ifconfig: TextContent) {
     let half_sec = std::time::Duration::from_millis(500);
     loop {
-         content_wg.set_content(get_wg());
+         content_wg.set_content(wgg::get_wgg());
          std::thread::sleep(half_sec);
          content_ifconfig.set_content(get_ifconfig(&wg_interface));
          std::thread::sleep(half_sec);
