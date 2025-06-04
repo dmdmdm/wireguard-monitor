@@ -11,19 +11,6 @@ use cursive::views::{ResizedView, Dialog, LinearLayout, TextContent, TextView, P
 use cursive::view::{SizeConstraint, ScrollStrategy};
 use cursive::traits::*;
 
-/*
-#[link(name = "c")]
-unsafe extern "C" {
-    fn geteuid() -> u32;
-}
-
-fn is_root() -> bool {
-    unsafe {
-        return geteuid() == 0;
-    }
-}
-*/
-
 fn is_root() -> bool {
     return users::get_current_uid() == 0
 }
