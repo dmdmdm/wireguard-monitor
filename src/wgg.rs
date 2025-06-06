@@ -5,7 +5,20 @@ use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
 use std::collections::HashMap;
+use std::fs;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
+use chrono::offset::Utc;
+use chrono::DateTime;
 use regex::Regex;
+use lazy_static::lazy_static;
+use std::sync::Mutex;
+use std::sync::Arc;
+use cursive::utils::span::SpannedString;
+use cursive::theme::Style;
+
+#[path = "./my_style.rs"]
+mod my_style;
 
 fn is_root() -> bool {
     return users::get_current_uid() == 0
@@ -18,6 +31,44 @@ fn get_wg() -> String {
 
     let output = Command::new("wg").arg("show").output().expect("Could not run 'wg show'");
     return String::from_utf8_lossy(&output.stdout).to_string();
+}
+
+struct Peers {
+    modtime: SystemTime,
+    peers_map: HashMap<String,String>
+}
+
+lazy_static! {
+    static ref LOADED_PEERS: Arc<Mutex<Option<Peers>>> = Arc::new(Mutex::new(None));
+}
+
+#[allow(dead_code)]
+fn format_systime(st: SystemTime) -> String {
+    let datetime: DateTime<Utc> = st.into();
+    return datetime.format("%d/%m/%Y %T").to_string();
+}
+
+fn get_loaded_peers_modtime() -> SystemTime {
+    let peers_opt = LOADED_PEERS.lock().unwrap();
+    if peers_opt.is_none() { return UNIX_EPOCH; }
+    return peers_opt.as_ref().unwrap().modtime.clone();
+}
+
+fn save_loaded_peers(modtime: SystemTime, peers_map: &HashMap<String,String>) {
+    let mut peers_opt = LOADED_PEERS.lock().unwrap();
+    *peers_opt = Some(Peers { modtime:modtime, peers_map:peers_map.clone() });
+}
+
+fn get_loaded_peers_map() -> HashMap<String,String> {
+    let peers_opt = LOADED_PEERS.lock().unwrap();
+    if peers_opt.is_none() { return HashMap::new(); }
+    return peers_opt.as_ref().unwrap().peers_map.clone();
+}
+
+fn get_file_modtime(filename: &str) -> SystemTime {
+    let metadata = fs::metadata(filename);
+    if metadata.is_err() { return UNIX_EPOCH; }
+    return metadata.unwrap().modified().unwrap();
 }
 
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
@@ -35,10 +86,8 @@ fn dump_peers(map: &HashMap<String,String>) -> String {
     return out;
 }
 
-// Possible Improvement: cache this and only read when it changes
-fn load_peers() -> HashMap<String,String> {
+fn load_peers(filename: &str) -> HashMap<String,String> {
     let mut map: HashMap::<String,String> = HashMap::new();
-    let filename = "/etc/wireguard/peers";
     if !Path::new(filename).is_file() { return map; }
     let result = read_lines(filename);
     if result.is_err() { return map; }
@@ -53,21 +102,22 @@ fn load_peers() -> HashMap<String,String> {
     return map;
 }
 
-fn merge(wg: &String, peers: &HashMap::<String,String>) -> String {
-    let mut out = String::from("");
+fn merge(wg: &String, peers_map: &HashMap::<String,String>) -> SpannedString<Style> {
+    let mut out = SpannedString::<Style>::new();
 
     let re_peer = Regex::new("^peer:\\s*(.+)").unwrap();
 
     for line in wg.lines() {
-        out.push_str(line);
-        out.push_str("\n");
+        out.append(line);
+        out.append("\n");
         let caps_peer = re_peer.captures(&line);
         if caps_peer.is_some() {
             let c = caps_peer.unwrap();
             let public_key = c.get(1).unwrap().as_str().trim().to_string();
-            let result = peers.get(&public_key);
+            let result = peers_map.get(&public_key);
             if result.is_some() {
-                out.push_str(&format!("  friendly-name: {}\n", result.unwrap()));
+                let txt = &format!("  friendly-name: {}\n", result.unwrap());
+                out.append(my_style::emphasis_string(txt));
             }
         }
     }
@@ -75,12 +125,23 @@ fn merge(wg: &String, peers: &HashMap::<String,String>) -> String {
     return out;
 }
 
-pub fn get_wgg() -> String {
+pub fn get_wgg() -> SpannedString<Style> {
     if !is_root() {
-        return "You must be root to run `wg`".to_string();
+        return my_style::plain_string("You must be root to run `wg`");
     }
     let wg = get_wg();
-    let peers = load_peers();
-    let merged = merge(&wg, &peers);
-    return merged
+
+    let filename = "/etc/wireguard/peers";
+    let modtime_file = get_file_modtime(&filename);
+    let modtime_loaded = get_loaded_peers_modtime();
+    let peers_map: HashMap<String,String>;
+    if modtime_file == modtime_loaded {
+        peers_map = get_loaded_peers_map();
+    }
+    else {
+        peers_map = load_peers(&filename);
+        save_loaded_peers(modtime_file, &peers_map);
+    }
+
+    return merge(&wg, &peers_map);
 }
