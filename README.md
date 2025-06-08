@@ -30,4 +30,4 @@ If you have file /etc/wireguard/peers setup with
     [public-key2]:[friendly-name2]
     ...
 
-Our `wg` window will display the friendly names like wgg - found here https://github.com/FlyveHest/wg-friendly-peer-names
+Our `wg` window will display the friendly names like [wgg](https://github.com/FlyveHest/wg-friendly-peer-names)
