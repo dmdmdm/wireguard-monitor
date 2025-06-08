@@ -29,6 +29,7 @@ fn get_wg() -> String {
         return "You must be root to run `wg`".to_string();
     }
 
+    // We tried setting WG_COLORMODE=always btu the colors didn't look nice
     let output = Command::new("wg").arg("show").output().expect("Could not run 'wg show'");
     return String::from_utf8_lossy(&output.stdout).to_string();
 }
@@ -105,19 +106,41 @@ fn load_peers(filename: &str) -> HashMap<String,String> {
 fn merge(wg: &String, peers_map: &HashMap::<String,String>) -> SpannedString<Style> {
     let mut out = SpannedString::<Style>::new();
 
-    let re_peer = Regex::new("^peer:\\s*(.+)").unwrap();
+    let re_interface = Regex::new("^(interface):\\s*(.+)").unwrap();
+    let re_peer = Regex::new("^(peer):\\s*(.+)").unwrap();
 
     for line in wg.lines() {
-        out.append(line);
-        out.append("\n");
+        let caps_interface = re_interface.captures(&line);
+        if caps_interface.is_some() {
+            let c = caps_interface.unwrap();
+            let label = c.get(1).unwrap().as_str().trim().to_string();
+            let interface = c.get(2).unwrap().as_str().trim().to_string();
+            let label_style = my_style::bold_green_string(&label);
+            let interface_style = my_style::bold_green_string(&interface);
+            out.append(label_style);
+            out.append(": ");
+            out.append(interface_style);
+            out.append("\n");
+        }
+        else {
+            out.append(line);
+            out.append("\n");
+        }
         let caps_peer = re_peer.captures(&line);
         if caps_peer.is_some() {
             let c = caps_peer.unwrap();
-            let public_key = c.get(1).unwrap().as_str().trim().to_string();
+            let public_key = c.get(2).unwrap().as_str().trim().to_string();
             let result = peers_map.get(&public_key);
             if result.is_some() {
-                let txt = &format!("  friendly-name: {}\n", result.unwrap());
-                out.append(my_style::emphasis_string(txt));
+                let label = "friendly-name";
+                let friendly = result.unwrap();
+                let label_style = my_style::bold_yellow_string(&label);
+                let friendly_style = my_style::bold_yellow_string(&friendly);
+                out.append("  ");
+                out.append(label_style);
+                out.append(": ");
+                out.append(friendly_style);
+                out.append("\n");
             }
         }
     }
